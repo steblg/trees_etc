@@ -3,12 +3,6 @@
 
 # Any split 's' devides split region into x <= s and x > s
 
-library(MASS)
-library(tree)
-data(Boston)
-
-set.seed(1)
-train <- sample(seq_len(nrow(Boston)), nrow(Boston)/2)
 
 rss_by_feature <- function(x, y, min_size = 2) {
   # browser()
@@ -185,4 +179,11 @@ gstree <- function(formula, input, model.control= list(minN = 20, minD = 5)) {
 }
 
 
-# Example: foo <- gstree(medv ~ ., input = Boston[train, ])
+# # Example:
+# library(MASS)
+# library(tree)
+# data(Boston)
+#
+# set.seed(1)
+# train <- sample(seq_len(nrow(Boston)), nrow(Boston)/2)
+# foo <- gstree(medv ~ ., input = Boston[train, ])
