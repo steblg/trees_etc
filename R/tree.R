@@ -10,32 +10,10 @@
 
 rss <- function(x) var(x) * (length(x) - 1)
 
-gstree <- function(formula, input, model.control= list(minN = 20, minS = 20, minD = 5, minF = rss)) {
-  # Do not split if number of observations is less or equal to minN
+gsTree <- function(formula, input, model.control= list(minS = 20, minD = 5, error = c("deviance", "gini"))) {
+  # Do not split if number of observations is less or equal to minS
   # Do not split if drop in rss is less or equal to minD percent
-  # First we implement minN only;
-  split_cont_predictor_stab <- function(min_size, split_cond_F) {
-    rv <- function(x, y){
-      # browser()
-      splits <- sort(unique(x))
-
-      if(length(splits) == 1) return(NULL) # don't attempt to split if all x are the same
-      rss_l <- lapply(splits, function(s){
-        rss_f <- x < s
-        fn <- sum(rss_f) - 1
-        nfn <- sum(!rss_f) - 1
-        if(any(fn < min_size || nfn < min_size))
-          rv <- c(NA, NA)
-        else
-          rv <- c(rss_l=var(y[rss_f]) * fn, rss_r=var(y[!rss_f]) * nfn)
-        return(rv)
-      })
-      rss_v <- sapply(rss_l, sum)
-      if(all(is.na(rss_v))) return(NULL) # not possible to split without breaking min_size requirement
-      i <- which.min(rss_v)
-      rv <- list(split = splits[i], rss = rss_l[[i]])
-      return(rv)
-    }
+  # First we implement minS only;
 
     input <- as.data.frame(input)
 
@@ -50,28 +28,40 @@ gstree <- function(formula, input, model.control= list(minN = 20, minS = 20, min
     X <- as.data.frame(model.matrix(formula, input)[, -1])
     X_label <- colnames(X)
 
-    # # Status of any node can be either 'S' for 'Split', 'P' for 'Pass' and 'L' for a 'Leaf'
-    # split_nodes <- list()
+    if( is.factor(Y) ){
+      stopifnot( ! is.factor(Y) ) # Classification trees aren't implemented yet.
+    } else {
+      minFUN <- rss
+    }
+    min_size <- model.control$minS
 
-    # Tree to be grown
-    rtree <- list()
+    split_along_predictor <- function(x, y) {
+      if(is.factor(x)){
+        splits <- levels(x)
+        op <- '=='
+      } else {
+        splits <- sort(unique(x))
+        op <- '<'
+      }
+      if(length(splits) == 1) return(NULL) # don't attempt to split if all x are the same
+      split_list <- lapply(splits, function(s){
+        split_filter <- do.call(op, list(x, s))
+        filter_in <- sum(split_filter) - 1
+        filter_out <- sum(!split_filter) - 1
+        if(any(filter_in < min_size || filter_out < min_size))
+          rv <- c(NA, NA)
+        else
+          rv <- c(error_left=minFUN(y[split_filter]), error_right=minFUN(y[!split_filter]))
+        return(rv)
+      })
+      error_value <- sapply(split_list, sum)
+      if(all(is.na(error_value))) return(NULL) # not possible to split without breaking min_size requirement
+      i <- which.min(error_value)
+      rv <- list(split = splits[i], op = op, error = split_list[[i]])
+      return(rv)
+    }
 
-    root_node <- list(
-      nN = 1,                        # Node number
-      status = 'S',
-      parent = NULL,                 # Number of a parent Node
-      split_conditions = "TRUE",       # List of split conditions to create this Node
-      value = mean(Y),
-      rss = var(Y) * (nrow(input) - 1),
-      best_split = NULL,           # list with the following members:
-      # split's feature and split's value, rss_l of left child node,
-      # rss_r of the right child node
-      obsN = nrow(input)           # Number of observations for this Node
-    )
-
-    rtree[[1]] <- root_node
-
-    best_node_split <- function(node) {
+    bestNodeSplit <- function(node) {
       # Given the node number find the best possible split for this node
       # Returns a list with the following members:
       # "feature" as a number, "delta_rss" - change in rss due to the split,
@@ -89,99 +79,121 @@ gstree <- function(formula, input, model.control= list(minN = 20, minS = 20, min
         XX <- X[nodeF, ]
         YY <- Y[nodeF]
       }
-      # browser()
-      # if( node$nN == 13) {
-      #   possible_splits <- list()
-      #   for(feature in seq_along(XX)){
-      #     cat('Trying feature: ', X_label[feature], '\n')
-      #     if(X_label[feature] == 'chas')
-      #       debug(split_along_predictor)
-      #     possible_splits[[feature]] <- split_along_predictor(XX[, feature], y = YY, min_size = model.control$minN)
-      #   }
-      # } else {
-      possible_splits <- lapply(XX, split_along_predictor, y = YY, min_size = model.control$minN)
-      # }
-      tmp <- sapply(possible_splits, function(x) if(is.null(x)) NA else sum(x$rss))
+      possible_splits <- lapply(XX, split_along_predictor, y = YY)
+      tmp <- sapply(possible_splits, function(x) if(is.null(x)) NA else sum(x$error))
       if(all(is.na(tmp))) return(NULL) # no allowed splits
       i <- which.min(tmp)
       return(c(list(feature = i), possible_splits[[i]]))
     }
 
-    find_best_split <- function(nodes){
+    findBestNodeToSplit <- function(nodes){
       split_effect <- sapply(nodes, function(i){
-        return(rtree[[i]]$rss - sum(rtree[[i]]$best_split$rss))
+        return(rtree[[i]]$error - sum(rtree[[i]]$best_split$error))
       })
       return(nodes[which.max(split_effect)])
     }
 
-    create_split <- function(i){
+    createSplit <- function(i){
       node_to_split <- rtree[[i]]
       N <- length(rtree)
 
       children <- list()
+      op <- with(node_to_split, best_split$op)
+      if(op == "<") {
+        nop <- ">="
+      } else if(op == "==") {
+        nop <- "!="
+      } else {
+        stop(paste("Operation", paste("'", op, "'", sep = ""), "not supported"))
+      }
+      op <- c(op, nop)
       for(j in 1:2){
         child <- list(
           nN = N + j,
           parent = i
         )
-        op <- c("<", ">=")
         # browser()
-        split_condition_str <- with(node_to_split,
-                                    c(split_conditions,
-                                      paste(X_label[best_split$feature], op[j], best_split$split)
-                                    )
-        )
-        child$split_conditions <- split_condition_str
+        add_condition <- with(node_to_split, list(feature=X_label[best_split$feature], operation = op[j], split_value=best_split$split))
+        # child$split_conditions_list <- c(node_to_split$split_conditions_list, list(add_condition))
+        split_condition_str <- c(node_to_split$split_conditions, with(add_condition, paste(feature, operation, split_value)))
         childF <- eval(str2lang(paste(split_condition_str, collapse = ' & ')), envir = X)
-        child$obsN <- sum(childF)
-        child$value <- mean(Y[childF])
-        if(child$obsN <= model.control$minN) child$status <- 'L' else child$status <- 'S'
+        
+        child <- within(child, {
+          split_conditions      <- split_condition_str
+          split_conditions_list <- c(node_to_split$split_conditions_list, list(add_condition))
+          obsN                  <- sum(childF)
+          error                 <- node_to_split$best_split$error[j]
+          value                 <- mean(Y[childF])
+          status                <- 'S'
+        })
+        child$best_split <- tmp <- bestNodeSplit(child)
+        if(is.null(tmp)) {
+          child$status <- 'L'  # no allowed splits
+          child['best_split'] <- list(tmp)      # this is how one can assign NULL to a list element;
+        }
 
-        # browser()
-        child$rss <- with(node_to_split, best_split$rss[j])
-        # browser()
         children[[j]] <- child
       }
       stopifnot((children[[1]]$obsN + children[[2]]$obsN) == node_to_split$obsN)
       return(children)
     }
+    
+    markNodeLeaf <- function(node){
+      node$status <- 'L'
+      node['best_split'] <- list(NULL)
+    }
+
+    # Tree to be grown
+    rtree <- list()
+    # error value of the model
+    errorVal <- minFUN(Y)
+
+    root_node <- list(
+      nN = 1,                        # Node number
+      status = 'S',
+      parent = NULL,                 # Number of a parent Node
+      split_conditions = "TRUE",       # List of split conditions to create this Node
+      split_conditions_list = NULL,
+      value = mean(Y),
+      error = minFUN(Y),
+      best_split = NULL,           # list with the following members:
+      # split's feature and split's value, rss_l of left child node,
+      # error_right of the right child node
+      obsN = nrow(input)           # Number of observations for this Node
+    )
+    tmp <- bestNodeSplit(root_node)
+    if(is.null(tmp)) { # no allowed splits
+      stop("Tree can't be build under current conditions, try changing model.control argument")
+    }
+    root_node['best_split'] <- list(tmp)
+    rtree[[1]] <- root_node
 
     nodesN_to_split <- 1
     while(length(nodesN_to_split) > 0){
 
-      cat("Nodes to split: ", paste(nodesN_to_split, collapse = ", "), "\n")
-      # browser()
-      split_info_not_available <- sapply(
-        nodesN_to_split,
-        function(i){is.null(rtree[[i]]$best_split)}
-      )
-      for(i in nodesN_to_split[split_info_not_available]){
-        cat("Splitting node: ", i, "\n")
-        # if(i == 17) browser()
-        tmp <- best_node_split(rtree[[i]])
-        if(is.null(tmp)) {
-          rtree[[i]]$status <- 'L'
-          nodesN_to_split <- seq_len(length(rtree))[sapply(rtree, function(x) x$status == 'S')]
-        }
-        rtree[[i]]$best_split <- tmp
-      }
+      cat("Nodes that can be split: ", paste(nodesN_to_split, collapse = ", "), "\n")
 
-      if(length(nodesN_to_split) == 0 ) return(rtree)
-
-      best_split <- find_best_split(nodesN_to_split)
-      # if(is.null(best_split) || is.na(best_split)) browser()
+      best_split <- findBestNodeToSplit(nodesN_to_split)
+      # if(best_split == 6) browser()
       cat("Best split: ", paste(best_split, collapse = ", "), "\n")
-
       # update parent
       rtree[[best_split]]$status<- 'P'
-
-
-      children <- create_split(best_split)
-      rtree <- c(rtree, children)
+      nodeToSplit <- rtree[[best_split]]
+      deltaError <- with(nodeToSplit, error - sum(best_split$error))
+      if(100 * deltaError / errorVal[length(errorVal)] < model.control$minD){
+        for(i in nodesN_to_split) rtree[[i]] <- markNodeLeaf(rtree[[i]])
+        break
+      } else {
+        children <- createSplit(best_split)
+        rtree <- c(rtree, children)
+        errorVal <- c(errorVal, sum(sapply(rtree, function(x){
+          if(x$status == 'P') return(0) else return(x$error)
+        })))
+      }
       nodesN_to_split <- seq_len(length(rtree))[sapply(rtree, function(x) x$status == 'S')]
 
     }
-    return(rtree)
+    return(list(tree = rtree, errVal = errorVal))
   }
 
   #Example:
@@ -192,4 +204,4 @@ gstree <- function(formula, input, model.control= list(minN = 20, minS = 20, min
   set.seed(1)
   train <- sample(seq_len(nrow(Boston)), nrow(Boston)/2)
 
-  foo <- gstree(medv ~ ., input = Boston[train, ])
+  foo <- gsTree(medv ~ ., input = Boston[train, ])
