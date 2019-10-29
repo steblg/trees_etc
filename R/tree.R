@@ -52,7 +52,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
         if(any(filter_in < min_size || filter_out < min_size))
           rv <- c(NA, NA)
         else
-          rv <- c(error_left=minFUN(y[split_filter]), error_right=minFUN(y[!split_filter]))
+          rv <- c(minFUN(y[split_filter]), minFUN(y[!split_filter]))
         return(rv)
       })
       error_value <- sapply(split_list, sum)
@@ -96,7 +96,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
     markNodeLeaf <- function(node){
       node$status <- 'L'
       node['best_split'] <- list(NULL)
-      node['children'] <- list(NULL)
+      node['children_nN'] <- list(NULL)
       return(node)
     }
    
@@ -117,7 +117,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       for(j in 1:2){
         child <- list(
           nN = N + j,
-          parent = i
+          parent_nN = i
         )
         add_condition <- with(node_to_split, list(feature=X_label[best_split$feature], operation = op[j], split_value=best_split$split))
         split_condition_str <- c(node_to_split$split_conditions, with(add_condition, paste(feature, operation, split_value)))
@@ -151,7 +151,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
     root_node <- list(
       nN = 1,                        # Node number
       status = 'S',
-      parent = NULL,                 # Number of a parent Node
+      parent_nN = NULL,                 # Number of a parent Node
       split_conditions = "TRUE",       # List of split conditions to create this Node
       split_conditions_list = NULL,
       value = mean(Y),
@@ -177,7 +177,6 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       best_split <- findBestNodeToSplit(nodesN_to_split)
       cat("Best split: ", paste(best_split, collapse = ", "), "\n")
       # update parent
-      # rtree_[[best_split]]$status<- 'P'
       nodeToSplit <- rtree_[[best_split]]
       deltaError <- with(nodeToSplit, error - sum(best_split$error))
       if(100 * deltaError / errorVal[length(errorVal)] < model.control$minD){
@@ -185,7 +184,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
         break
       } else {
         kids <- createSplit(best_split)
-        rtree_[[best_split]] <- within(nodeToSplit, {status <- 'P'; children <- sapply(kids, function(x) x$nN)})
+        rtree_[[best_split]] <- within(nodeToSplit, {status <- 'P'; children_nN <- sapply(kids, function(x) x$nN)})
         rtree_ <- c(rtree_, kids)
         errorVal <- c(errorVal, sum(sapply(rtree_, function(x){
           if(x$status == 'P') return(0) else return(x$error)
@@ -230,8 +229,10 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
         nm <- nodeDefnStr(rtree_node)
       }
       rv <- Node$new(nm)
-      rv$parent_nN <- rtree_node$parent
-      for(nm in setdiff(names(rtree_node), 'parent')) rv[[nm]] <- rtree_node[[nm]]
+      for (nm in names(rtree_node)) {
+        # node_nm <- if (nm %in% c('children', 'parent')) paste(nm, 'nN', sep='_') else nm
+        rv[[nm]] <- rtree_node[[nm]]
+      }
       rv
     }
     
@@ -252,7 +253,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
     }
     
     printTree <- function(){
-      base::print(dataTree(), "obsN", "value", "error")
+      base::print(dataTree(), "nN", "obsN", "value", "error")
     }
     
     extractLeaves <- function(as.dataframe = FALSE){
@@ -295,12 +296,9 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
     plotTree <- function(){
       plot(dataTree())
     }
-    
-    myname_ <- 'foo'
-    
+        
     rv <- list(
       tree = rtree_,
-      myname = myname_,
       errVal = errorVal,
       printTree = printTree,
       printLeaves = printLeaves,
