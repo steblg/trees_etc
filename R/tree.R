@@ -3,13 +3,15 @@
 # ToDo:
 #   1. Handling of NA's. For now one has to deal with them (na.omit) prior to using the method;
 #   2. Feature importance
-#   3. Complexity pruning
-#   4. Cross-validation
+#   3. Complexity pruning w cross-validation
+
+#   5. Move to S3
+#   6. Package namespace
 
 
 rss <- function(x) var(x) * (length(x) - 1)
 
-gsTree <- function(formula, input, model.control= list(minS = 20, minD = 5, error = c("deviance", "gini"))) {
+crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, error = c("deviance", "gini"))) {
   # Do not split if number of observations is less or equal to minS
   # Do not split if drop in rss is less or equal to minD percent
   # First we implement minS only;
@@ -91,6 +93,13 @@ gsTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       return(nodes[which.max(split_effect)])
     }
 
+    markNodeLeaf <- function(node){
+      node$status <- 'L'
+      node['best_split'] <- list(NULL)
+      node['children'] <- list(NULL)
+      return(node)
+    }
+   
     createSplit <- function(i){
       node_to_split <- rtree_[[i]]
       N <- length(rtree_)
@@ -123,23 +132,13 @@ gsTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
           status                <- 'S'
         })
         child$best_split <- tmp <- bestNodeSplit(child)
-        if(is.null(tmp)) {
-          child$status <- 'L'  # no allowed splits
-          child['best_split'] <- list(tmp)      # this is how one can assign NULL to a list element;
-        }
-
+        if(is.null(tmp)) child <- markNodeLeaf(child)
         children[[j]] <- child
       }
       stopifnot((children[[1]]$obsN + children[[2]]$obsN) == node_to_split$obsN)
       return(children)
     }
     
-    markNodeLeaf <- function(node){
-      node$status <- 'L'
-      node['best_split'] <- list(NULL)
-      return(node)
-    }
-   
     # Tree to be grown
     rtree_ <- list()
     dtree_ <- NULL
@@ -178,21 +177,21 @@ gsTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       best_split <- findBestNodeToSplit(nodesN_to_split)
       cat("Best split: ", paste(best_split, collapse = ", "), "\n")
       # update parent
-      rtree_[[best_split]]$status<- 'P'
+      # rtree_[[best_split]]$status<- 'P'
       nodeToSplit <- rtree_[[best_split]]
       deltaError <- with(nodeToSplit, error - sum(best_split$error))
       if(100 * deltaError / errorVal[length(errorVal)] < model.control$minD){
         for(i in nodesN_to_split) rtree_[[i]] <- markNodeLeaf(rtree_[[i]])
         break
       } else {
-        children <- createSplit(best_split)
-        rtree_ <- c(rtree_, children)
+        kids <- createSplit(best_split)
+        rtree_[[best_split]] <- within(nodeToSplit, {status <- 'P'; children <- sapply(kids, function(x) x$nN)})
+        rtree_ <- c(rtree_, kids)
         errorVal <- c(errorVal, sum(sapply(rtree_, function(x){
           if(x$status == 'P') return(0) else return(x$error)
         })))
       }
       nodesN_to_split <- seq_len(length(rtree_))[sapply(rtree_, function(x) x$status == 'S')]
-
     }
     
     nodeDefn <- function(node){
@@ -297,9 +296,11 @@ gsTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       plot(dataTree())
     }
     
+    myname_ <- 'foo'
     
     rv <- list(
       tree = rtree_,
+      myname = myname_,
       errVal = errorVal,
       printTree = printTree,
       printLeaves = printLeaves,
@@ -317,8 +318,8 @@ gsTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
   set.seed(1)
   train <- sample(seq_len(nrow(Boston)), nrow(Boston)/2)
 
-  #foo <- gsTree(medv ~ ., input = Boston[train, ], model.control=list(minS = 5, minD = 0))
-  foo <- gsTree(medv ~ ., input = Boston[train, ])
+  #foo <- crTree(medv ~ ., input = Boston[train, ], model.control=list(minS = 5, minD = 0))
+  foo <- crTree(medv ~ ., input = Boston[train, ])
   Y <- foo$predict(Boston[-train, ])
 
   fit <- tree(medv ~ ., data = Boston[train, ])
