@@ -316,8 +316,8 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
   set.seed(1)
   train <- sample(seq_len(nrow(Boston)), nrow(Boston)/2)
 
-  #foo <- crTree(medv ~ ., input = Boston[train, ], model.control=list(minS = 5, minD = 0))
-  foo <- crTree(medv ~ ., input = Boston[train, ])
+  foo <- crTree(medv ~ ., input = Boston[train, ], model.control=list(minS = 5, minD = 5))
+  # foo <- crTree(medv ~ ., input = Boston[train, ])
   Y <- foo$predict(Boston[-train, ])
 
   fit <- tree(medv ~ ., data = Boston[train, ])
