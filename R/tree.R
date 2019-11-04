@@ -8,6 +8,7 @@
 #   5. Move to S3
 #   6. Package namespace
 
+source("./tree_methods.R")
 
 rss <- function(x) var(x) * (length(x) - 1)
 
@@ -99,7 +100,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       node['children_nN'] <- list(NULL)
       return(node)
     }
-   
+
     createSplit <- function(i){
       node_to_split <- rtree_[[i]]
       N <- length(rtree_)
@@ -122,7 +123,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
         add_condition <- with(node_to_split, list(feature=X_label[best_split$feature], operation = op[j], split_value=best_split$split))
         split_condition_str <- c(node_to_split$split_conditions, with(add_condition, paste(feature, operation, split_value)))
         childF <- eval(str2lang(paste(split_condition_str, collapse = ' & ')), envir = X)
-        
+
         child <- within(child, {
           split_conditions      <- split_condition_str
           split_conditions_list <- c(node_to_split$split_conditions_list, list(add_condition))
@@ -138,15 +139,13 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       stopifnot((children[[1]]$obsN + children[[2]]$obsN) == node_to_split$obsN)
       return(children)
     }
-    
+
     # Tree to be grown
     rtree_ <- list()
-    dtree_ <- NULL
-    leaves_ <- NULL
     # error value of the model
     errorVal <- minFUN(Y)
-    
-    
+
+
 
     root_node <- list(
       nN = 1,                        # Node number
@@ -161,7 +160,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       # error_right of the right child node
       obsN = nrow(input)           # Number of observations for this Node
     )
-    
+
     tmp <- bestNodeSplit(root_node)
     if(is.null(tmp)) { # no allowed splits
       stop("Tree can't be build under current conditions, try changing model.control argument")
@@ -192,97 +191,7 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       }
       nodesN_to_split <- seq_len(length(rtree_))[sapply(rtree_, function(x) x$status == 'S')]
     }
-    
-    nodeDefn <- function(node){
-      slL <- list()
-      for(e in node$split_conditions_list){
-        slL[[e$feature]] <- c(slL[[e$feature]], list(e))
-      }
-      collapse_feature <- function(cL){ # elements of cL have the same 'feature'
-          if(length(cL) == 1) return(cL)
-          opF <- factor(sapply(cL, function(x) x$operation))
-          L <- split(cL, opF)
-          names(L) <- NULL
-          collapse_F <- function(y) { # elements of y have same 'feature' and the same 'operation'
-            if(y[[1]]$operation %in% c("==", '!=')) return(y)
-            if(y[[1]]$operation == "<") return(list(feature = y[[1]]$feature, operation = y[[1]]$operation, split_value = min(sapply(y, function(x) x$split_value))))
-            if(y[[1]]$operation == ">=") return(list(feature = y[[1]]$feature, operation = y[[1]]$operation, split_value = max(sapply(y, function(x) x$split_value))))
-            stop(paste(paste("'", y[[1]]$operation, "'", sep =""), "is not supported"))
-          }
-          return(lapply(L, collapse_F))
-      }
-      return(lapply(slL, collapse_feature))
-    }
-    
-    nodeDefnStr <- function(node){
-      definition <- unlist(nodeDefn(node = node), recursive = FALSE, use.names = FALSE)
-      return(paste(sapply(definition, function(x) with(x, paste("(", feature, operation, split_value, ")"))), collapse = " & "))
-    }
-        
-    toDataTreeNode <- function(rtree_node, abbrev = TRUE) {
-      library(data.tree)
 
-      if(isTRUE(abbrev)){
-       # nm <- paste(rtree_node$split_conditions_list[[length(rtree_node$split_conditions_list)]], collapse = " ")
-        nm <- with(rtree_node, split_conditions[length(split_conditions)])
-      } else {
-        nm <- nodeDefnStr(rtree_node)
-      }
-      rv <- Node$new(nm)
-      for (nm in names(rtree_node)) {
-        # node_nm <- if (nm %in% c('children', 'parent')) paste(nm, 'nN', sep='_') else nm
-        rv[[nm]] <- rtree_node[[nm]]
-      }
-      rv
-    }
-    
-    toDataTree <- function(tri){
-      library(data.tree)
-      
-      flat_tree <- lapply(tri, toDataTreeNode)
-      assembled_tree <- flat_tree[[1]]
-      for(i in 2 : length(flat_tree)){
-        flat_tree[[flat_tree[[i]]$parent_nN]]$AddChildNode(flat_tree[[i]])
-      }
-      return(assembled_tree)
-    }
-    
-    dataTree <- function(){
-      if( is.null(dtree_) ) dtree_ <<- toDataTree(rtree_)
-      return(dtree_)
-    }
-    
-    printTree <- function(){
-      base::print(dataTree(), "nN", "obsN", "value", "error")
-    }
-    
-    extractLeaves <- function(as.dataframe = FALSE){
-      if(is.null(leaves_)){
-        leaves_index <- seq_along(rtree_)[sapply(rtree_, function(x) x$status == 'L')]
-        leaves <- lapply(leaves_index, function(x) {
-          xn <- rtree_[[x]]
-          xn[["defn"]] <- nodeDefnStr(xn)
-          xn <- xn[c("nN", "split_conditions", "value", "error", "obsN", "defn")]
-          xn
-        })
-        leaves_ <<- leaves
-      }
-      if(isTRUE(as.dataframe)){
-        rv <- lapply(leaves_, function(x) {
-          x <- within(x, split_conditions <- paste(split_conditions, collapse = " & "))
-          x <- as.data.frame(x, stringsAsFactors = FALSE)
-          row.names(x) <- NULL
-          x
-        })
-        return(do.call(rbind, rv))
-      }
-      return(leaves_)
-    }
-        
-    printLeaves <- function(){
-      print(extractLeaves(as.dataframe = TRUE))
-    }
-    
     prediction <- function(X){
       leaves <- extractLeaves(as.dataframe = TRUE)
       Y <- vector("list", nrow(X))
@@ -292,17 +201,11 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
       }
       return(unlist(Y))
     }
-    
-    plotTree <- function(){
-      plot(dataTree())
-    }
-        
+
+
     rv <- list(
       tree = rtree_,
       errVal = errorVal,
-      printTree = printTree,
-      printLeaves = printLeaves,
-      plotTree = plotTree,
       predict = prediction
     )
     return(rv)
@@ -322,5 +225,5 @@ crTree <- function(formula, input, model.control= list(minS = 20, minD = 5, erro
 
   fit <- tree(medv ~ ., data = Boston[train, ])
   YY <- predict(fit, newdata = Boston[-train, ])
-  
+
   data.frame(Y = Y, YY = YY, YYY = Boston[-train, 'medv'])
