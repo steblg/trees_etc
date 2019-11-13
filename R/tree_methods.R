@@ -1,6 +1,6 @@
 #To be reworked when using S3
 
-nodeDefn <- function(node){
+node_defn <- function(node){
   slL <- list()
   for(e in node$split_conditions_list){
     slL[[e$feature]] <- c(slL[[e$feature]], list(e))
@@ -21,18 +21,18 @@ nodeDefn <- function(node){
   return(lapply(slL, collapse_feature))
 }
 
-nodeDefnStr <- function(node){
-  definition <- unlist(nodeDefn(node = node), recursive = FALSE, use.names = FALSE)
+node_defn_str <- function(node){
+  definition <- unlist(node_defn(node = node), recursive = FALSE, use.names = FALSE)
   return(paste(sapply(definition, function(x) with(x, paste("(", feature, operation, split_value, ")"))), collapse = " & "))
 }
     
-toDataTreeNode <- function(rtree_node, abbrev = TRUE) {
+to_data_tree_node <- function(rtree_node, abbrev = TRUE) {
   library(data.tree)
 
   if(isTRUE(abbrev)){
     nm <- with(rtree_node, split_conditions[length(split_conditions)])
   } else {
-    nm <- nodeDefnStr(rtree_node)
+    nm <- node_defn_str(rtree_node)
   }
   rv <- Node$new(nm)
   for (nm in names(rtree_node)) {
@@ -41,11 +41,11 @@ toDataTreeNode <- function(rtree_node, abbrev = TRUE) {
   rv
 }
 
-toDataTree <- function(xtree, active = NULL){
+to_data_tree <- function(xtree, active = NULL){
   library(data.tree)
   
   if (is.null(active)) active <- rep(TRUE, length(xtree))
-  flat_tree <- lapply(xtree, toDataTreeNode)
+  flat_tree <- lapply(xtree, to_data_tree_node)
   assembled_tree <- flat_tree[[1]]
   for(i in 2 : length(flat_tree)){
     if (active[i]) flat_tree[[flat_tree[[i]]$parent_nN]]$AddChildNode(flat_tree[[i]])
@@ -53,16 +53,16 @@ toDataTree <- function(xtree, active = NULL){
   return(assembled_tree)
 }
 
-printTree <- function(xtree){
-  base::print(toDataTree(xtree), "nN", "obsN", "value", "error")
+print_tree <- function(xtree){
+  base::print(to_data_tree(xtree), "nN", "obsN", "value", "error")
 }
 
-plotTree <- function(){
-  plot(toDataTree(xtree))
+plot_tree <- function(){
+  plot(to_data_tree(xtree))
 }
 
 
-treeLeaves <- function(xtree, active  = NULL, index = TRUE){
+tree_leaves <- function(xtree, active  = NULL, index = TRUE){
   # If isTRUE(index) returns index, i.e. nodes numbers, otherwise returns selector, i.e. logical vector of length(xtree)
   if (is.null(active)) 
     leaves_F <- seq_along(xtree)[sapply(xtree, function(x) is.null(x$children_nN))]
@@ -79,11 +79,11 @@ treeLeaves <- function(xtree, active  = NULL, index = TRUE){
   rv
 }
 
-printLeaves <- function(xtree, active = NULL, as.dataframe = FALSE){
-  leaves_index <- treeLeaves(xtree, active = active)
+tree_leaves_info <- function(xtree, active = NULL, as.dataframe = FALSE){
+  leaves_index <- tree_leaves(xtree, active = active)
   leaves <- lapply(leaves_index, function(x) {
     xn <- rtree_[[x]]
-    xn[["defn"]] <- nodeDefnStr(xn)
+    xn[["defn"]] <- node_defn_str(xn)
     xn <- xn[c("nN", "split_conditions", "value", "error", "obsN", "defn")]
     xn
   })
@@ -100,11 +100,12 @@ printLeaves <- function(xtree, active = NULL, as.dataframe = FALSE){
   return(leaves)
 }
     
-predictValues <- function(xtree, X, active = NULL){
-  leaves <- xtree[treeLeaves(xtree = xtree, active = active, index = TRUE)]
+predict_values <- function(xtree, X, active = NULL){
+  leaves <- xtree[tree_leaves(xtree = xtree, active = active, index = TRUE)]
   leaves_values <- sapply(leaves, function(leaf) leaf$value)
-  leaves_attrib <- lapply(leaves, function(leaf) eval(str2lang(leaf[["split_conditions"]]), envir=X))
+  leaves_attrib <- lapply(leaves, function(leaf) eval(str2lang(paste(leaf[["split_conditions"]], collapse = " & ")), envir=X))
   leaves_attrib <- matrix(unlist(leaves_attrib), ncol = length(leaves), byrow = FALSE)
   Y <- leaves_attrib %*% leaves_values
-  Y
+  Y[, 1]
 }
+
