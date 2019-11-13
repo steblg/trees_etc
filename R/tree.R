@@ -29,7 +29,10 @@ Y <- predict_values(reg_tree, Boston[-train, ])
 
 fit <- tree(medv ~ ., data = Boston[train, ])
 YY <- predict(fit, newdata = Boston[-train, ])
+YYY <- Boston[-train, 'medv']
+result <- data.frame(Y = Y, YY = YY, YYY = YYY)
 
-result <- data.frame(Y = Y, YY = YY, YYY = Boston[-train, 'medv'])
+merr <- sum((Y - YYY)^2)/length(Y)
+terr <- sum((YY - YYY)^2)/length(YY)
 
 prune_info <- cvtune(medv ~ ., input = Boston[train, ], model.control=list(minS = 5, minD = 5))

@@ -14,12 +14,12 @@ pruning_sequence <- function(xtree, pack = TRUE) {
   info_list <- list(info)
   alpha_list <- 0
   while ((an <- sum(info$active)) > 1) {
-    message("Number of active nodes: ", an)
+    # message("Number of active nodes: ", an)
     g_seq <- with(info, ifelse(active == TRUE, substitution_error / (node_complexity - 1), NA))
     nnn <- order(g_seq, info$node_complexity, na.last = TRUE)[1]
     nn <- which.min(g_seq)
     stopifnot(nn == nnn)
-    message("Pruning: ", nn)
+    # message("Pruning: ", nn)
     alpha <- g_seq[nn]
     info <- prune_node(xtree = xtree, node_n = nn, info = info)
     alpha_list <- c(alpha_list, alpha)
@@ -96,7 +96,7 @@ cvtune <- function(formula, input, k = 10, model.control) {
     test_err_list <- lapply(fold_prune_seq, function(prune_info, tree, x_test, y_test) {
         y_pred <- predict_values(xtree = tree, X = x_test, active = prune_info$active)
         #browser()
-        test_err <- (y_pred - y_test)^2 / length(y_test)
+        test_err <- sum((y_pred - y_test)^2) / length(y_test)
         return(list(alpha = prune_info$alpha, err = test_err))
       }, tree = fold_tree, x_test = X[test_fold, , drop = FALSE], y_test = Y[test_fold]
     )
@@ -114,14 +114,19 @@ cvtune <- function(formula, input, k = 10, model.control) {
       rightmost.closed = FALSE, all.inside = FALSE,left.open = FALSE
     )
     # calculate this fold's average prediction error for each train_alpha range
-    fold_err <- NA_real_
-    fold_err[unique(alpha_assignment)] <- aggregate(sapply(fold_info, function(x) x$err), by = list(alpha_assignment), FUN = mean)
+    fold_err <- rep(NA_real_, length(train_alpha))
+    # browser()
+    agg_errs <- aggregate(sapply(fold_info, function(x) x$err), by = list(alpha_assignment), FUN = mean)
+    fold_err[agg_errs[, 1]] <- agg_errs[, 2]
     fs <- (i - 1) * alpha_ranges_num + 1
     fe <- i * alpha_ranges_num
+    # browser()
     fold_err_vec[fs : fe] <- fold_err
   }
   # calculate average error per train_alpha range
   alpha_range_ind <- rep(1:alpha_ranges_num, k)
-  avg_error <- aggregate(fold_err_vec, by = list(alpha_range = alpha_range_ind), FUN = mean)
+  # browser()
+  avg_error <- aggregate(fold_err_vec, by = list(alpha_range = alpha_range_ind), FUN = function(...) mean(..., na.rm=TRUE))[, 2]
+  browser()
   return(list(prune_step = which.min(avg_error), alpha_val = train_alpha_vals[which.min(avg_error)]))
 }

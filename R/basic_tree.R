@@ -167,10 +167,10 @@ build_basic_tree <- function(Y, X, model.control= list(minS = 20, minD = 5, erro
     nodesN_to_split <- 1
     while(length(nodesN_to_split) > 0){
 
-      cat("Nodes that can be split: ", paste(nodesN_to_split, collapse = ", "), "\n")
+      # cat("Nodes that can be split: ", paste(nodesN_to_split, collapse = ", "), "\n")
 
       best_split <- findBestNodeToSplit(nodesN_to_split)
-      cat("Best split: ", paste(best_split, collapse = ", "), "\n")
+      # cat("Best split: ", paste(best_split, collapse = ", "), "\n")
       # update parent
       nodeToSplit <- rtree_[[best_split]]
       deltaError <- with(nodeToSplit, error - sum(best_split$error))
