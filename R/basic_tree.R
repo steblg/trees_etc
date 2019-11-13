@@ -1,4 +1,5 @@
 rss <- function(x) var(x) * (length(x) - 1)
+# rss <- function(x) var(x) * length(x)
 
 basic_tree <- function(formula, input, model.control= list(minS = 20, minD = 5, error = c("deviance", "gini"))) {
     input <- as.data.frame(input)
@@ -13,8 +14,8 @@ basic_tree <- function(formula, input, model.control= list(minS = 20, minD = 5, 
     # X_label <- attr(formula_terms, "terms.labels")
     X <- model.matrix(formula, input)
     ids <- attr(X, 'assign')
-    X <- as.data.frame(X[, ids, drop = FALSE])
-    
+    ids <- which(ids > 0)
+    X <- as.data.frame(X)[, ids, drop = FALSE]
     return(build_basic_tree(Y = Y, X = X, model.control = model.control))
 }
 

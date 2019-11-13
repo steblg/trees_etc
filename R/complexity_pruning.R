@@ -42,6 +42,19 @@ pruning_sequence <- function(xtree, pack = TRUE) {
   }
 }
 
+cc_prune_tree <- function(xtree, alpha, prune_seq = NULL) {
+  if (is.null(prune_seq)) prune_seq <- pruning_sequence(xtree = xtree, pack = FALSE)
+  if (is.null(names(prune_seq))) {
+    alpha_list <- lapply(prune_seq, function(x) x$alpha)
+    active_list <- lapply(prune_seq, function(x) x$active)
+    prune_seq <- list(alpha = alpha_list, active =active_list)
+  }
+  alpha_list <- prune_seq$alpha
+  alpha <- sort(alpha)
+  ind <- findInterval(alpha, unlist(alpha_list), rightmost.closed = FALSE, all.inside = FALSE,left.open = FALSE)
+  return(prune_seq$active[ind])
+}
+
 # G. James, D. Witten, T. Hastie, R. Tibshirani, ISLR, 8th printing, 2017, page 309
 # Algorithm 8.1 Building a regression tree
 
@@ -73,7 +86,8 @@ cvtune <- function(formula, input, k = 10, model.control) {
 
   X <- model.matrix(formula, input)
   ids <- attr(X, 'assign')
-  X <- as.data.frame(X[, ids, drop = FALSE])
+  ids <- which(ids > 0)
+  X <- as.data.frame(X)[, ids, drop = FALSE]
   
   # Following the algorithm above:
   
@@ -91,12 +105,11 @@ cvtune <- function(formula, input, k = 10, model.control) {
   process_fold <- function(test_fold, Y, X, model.control){
     train_fold <- !test_fold
     fold_tree <- build_basic_tree(Y = Y[train_fold], X = X[train_fold, , drop = FALSE], model.control = model.control)
-    fold_prune_seq <- pruning_sequence(fold_tree)
-    # browser()
+    fold_prune_seq <- pruning_sequence(fold_tree, pack = TRUE)
+
     test_err_list <- lapply(fold_prune_seq, function(prune_info, tree, x_test, y_test) {
         y_pred <- predict_values(xtree = tree, X = x_test, active = prune_info$active)
-        #browser()
-        test_err <- sum((y_pred - y_test)^2) / length(y_test)
+        test_err <- sum((y_pred - y_test)^2) / (length(y_test) - 1)
         return(list(alpha = prune_info$alpha, err = test_err))
       }, tree = fold_tree, x_test = X[test_fold, , drop = FALSE], y_test = Y[test_fold]
     )
@@ -115,18 +128,18 @@ cvtune <- function(formula, input, k = 10, model.control) {
     )
     # calculate this fold's average prediction error for each train_alpha range
     fold_err <- rep(NA_real_, length(train_alpha))
-    # browser()
     agg_errs <- aggregate(sapply(fold_info, function(x) x$err), by = list(alpha_assignment), FUN = mean)
     fold_err[agg_errs[, 1]] <- agg_errs[, 2]
     fs <- (i - 1) * alpha_ranges_num + 1
     fe <- i * alpha_ranges_num
-    # browser()
     fold_err_vec[fs : fe] <- fold_err
   }
   # calculate average error per train_alpha range
   alpha_range_ind <- rep(1:alpha_ranges_num, k)
   # browser()
   avg_error <- aggregate(fold_err_vec, by = list(alpha_range = alpha_range_ind), FUN = function(...) mean(..., na.rm=TRUE))[, 2]
-  browser()
-  return(list(prune_step = which.min(avg_error), alpha_val = train_alpha_vals[which.min(avg_error)]))
+  # browser()
+  return(list(tree = train_tree, prune_seq = train_prune_seq, alpha = train_alpha, avg_error = avg_error))
 }
+
+  

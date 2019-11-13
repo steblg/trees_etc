@@ -53,12 +53,12 @@ to_data_tree <- function(xtree, active = NULL){
   return(assembled_tree)
 }
 
-print_tree <- function(xtree){
-  base::print(to_data_tree(xtree), "nN", "obsN", "value", "error")
+print_tree <- function(xtree, active = NULL){
+  base::print(to_data_tree(xtree, active = active), "nN", "obsN", "value", "error")
 }
 
-plot_tree <- function(){
-  plot(to_data_tree(xtree))
+plot_tree <- function(xtree, active = NULL){
+  plot(to_data_tree(xtree, active = active))
 }
 
 

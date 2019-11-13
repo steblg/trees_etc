@@ -36,3 +36,6 @@ merr <- sum((Y - YYY)^2)/length(Y)
 terr <- sum((YY - YYY)^2)/length(YY)
 
 prune_info <- cvtune(medv ~ ., input = Boston[train, ], model.control=list(minS = 5, minD = 5))
+print_tree(prune_info$tree, active = prune_info$prune_seq$active[[7]])
+
+print_tree(reg_tree, cc_prune_tree(reg_tree, alpha = 200)[[1]])
