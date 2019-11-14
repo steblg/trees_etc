@@ -27,7 +27,7 @@ reg_tree <- basic_tree(medv ~ ., input = Boston[train, ], model.control=list(min
 # reg_tree <- basic_tree(medv ~ ., input = Boston[train, ])
 Y <- predict_values(reg_tree, Boston[-train, ])
 
-fit <- tree(medv ~ ., data = Boston[train, ])
+fit <- tree(medv ~ ., data = Boston[train, ]) # This tree corresponds to model.control = list(minS = 5, minD = 10)
 YY <- predict(fit, newdata = Boston[-train, ])
 YYY <- Boston[-train, 'medv']
 result <- data.frame(Y = Y, YY = YY, YYY = YYY)
