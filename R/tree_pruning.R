@@ -71,29 +71,29 @@ complexity <- function(xtree, active = NULL){
   node_complexity
 }
 
-tree_info <- function(xtree, active = NULL) {
+# tree_info <- function(xtree, active = NULL) {
 
-  # "tree_info" defines any nested subtree of the "xtree" 
-  # and provides some "helper" information about this subtree
-  # that allowes other functions to treet the subtree as "xtree"
+  # # "tree_info" defines any nested subtree of the "xtree" 
+  # # and provides some "helper" information about this subtree
+  # # that allowes other functions to treet the subtree as "xtree"
   
-  if (is.null(active)) active <- rep(TRUE, length(xtree))
-  active_nN <- seq_along(xtree)[active]
-  leaves <- tree_leaves(xtree = xtree, active = active, index = TRUE)
+  # if (is.null(active)) active <- rep(TRUE, length(xtree))
+  # active_nN <- seq_along(xtree)[active]
+  # leaves <- tree_leaves(xtree = xtree, active = active, index = TRUE)
   
-  info_gain <- sub_error <- node_complexity <- rep(0, length(xtree))
+  # info_gain <- sub_error <- node_complexity <- rep(0, length(xtree))
   
-  for (i in rev(active_nN)) {
-    curr_node <- xtree[[i]]
-    info_gain[i] <- with(curr_node, {if (i %in% leaves) 0 else error - sum(best_split$error)}) 
-    sub_error[i] <- with(curr_node, {if (i %in% leaves) 0 else info_gain[i] + (sub_error[children_nN[1]] + sub_error[children_nN[2]])})
-    node_complexity[i] <- with(curr_node, {if (i %in% leaves) 1 else (node_complexity[children_nN[1]] + node_complexity[children_nN[2]])})
-  }
+  # for (i in rev(active_nN)) {
+    # curr_node <- xtree[[i]]
+    # info_gain[i] <- with(curr_node, {if (i %in% leaves) 0 else error - sum(best_split$error)}) 
+    # sub_error[i] <- with(curr_node, {if (i %in% leaves) 0 else info_gain[i] + (sub_error[children_nN[1]] + sub_error[children_nN[2]])})
+    # node_complexity[i] <- with(curr_node, {if (i %in% leaves) 1 else (node_complexity[children_nN[1]] + node_complexity[children_nN[2]])})
+  # }
   
-  tmp <- rep(FALSE, length(xtree))
-  tmp[leaves] <- TRUE
-  return(list(active = active, split_info_gain = info_gain, node_complexity = node_complexity, substitution_error = sub_error, leaves = tmp))
-}
+  # tmp <- rep(FALSE, length(xtree))
+  # tmp[leaves] <- TRUE
+  # return(list(active = active, split_info_gain = info_gain, node_complexity = node_complexity, substitution_error = sub_error, leaves = tmp))
+# }
 
 walk_down <- function(xtree, node_n, active = NULL, index = TRUE){
   # Returns vector of all node indices in the subtree

@@ -43,6 +43,8 @@ pruning_sequence <- function(xtree, pack = TRUE) {
 }
 
 cc_prune_tree <- function(xtree, alpha, prune_seq = NULL) {
+  # Returns a subtree, as a list of active nodes, 
+  # of the 'xtree' that corresponds to complexity multiplier 'alpha'
   if (is.null(prune_seq)) prune_seq <- pruning_sequence(xtree = xtree, pack = FALSE)
   if (is.null(names(prune_seq))) {
     alpha_list <- lapply(prune_seq, function(x) x$alpha)
@@ -73,9 +75,10 @@ cc_prune_tree <- function(xtree, alpha, prune_seq = NULL) {
 # 4. Return the subtree from Step 2 that corresponds to the chosen value
 # of α.
 
-cvtune <- function(formula, input, k = 10, model.control) { 
+cvtune <- function(formula, input, k = 10, model.control = model_control()) { 
 # remember that "input" here is a training data, not all available data!
 # "cvtune" function is applied to the training data only!
+# Returns
 
   input <- as.data.frame(input)
 

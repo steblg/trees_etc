@@ -4,10 +4,11 @@
 #   1. Handling of NA's. For now one has to deal with them (na.omit) prior to using the method;
 #   2. Feature importance
 #   3. Complexity pruning w cross-validation
-
+#   4. Fix handling of categorical predictors
 #   5. Move to S3
 #   6. Package namespace
 #   7. Change "source" to a proper "package" way of loading files
+#   8. Use "dendrogram" for printing
 
 source(file.path(getwd(), "R", "basic_tree.R"))
 source(file.path(getwd(), "R", "tree_methods.R"))
@@ -23,7 +24,7 @@ data(Boston)
 set.seed(1)
 train <- sample(seq_len(nrow(Boston)), nrow(Boston)/2)
 
-reg_tree <- basic_tree(medv ~ ., input = Boston[train, ], model.control=list(minS = 5, minD = 5))
+reg_tree <- basic_tree(medv ~ ., input = Boston[train, ])
 # reg_tree <- basic_tree(medv ~ ., input = Boston[train, ])
 Y <- predict_values(reg_tree, Boston[-train, ])
 
@@ -35,7 +36,10 @@ result <- data.frame(Y = Y, YY = YY, YYY = YYY)
 merr <- sum((Y - YYY)^2)/length(Y)
 terr <- sum((YY - YYY)^2)/length(YY)
 
-prune_info <- cvtune(medv ~ ., input = Boston[train, ], model.control=list(minS = 5, minD = 5))
+prune_info <- cvtune(medv ~ ., input = Boston[train, ])
+
+stop()
+
 print_tree(prune_info$tree, active = prune_info$prune_seq$active[[7]])
 
 print_tree(reg_tree, cc_prune_tree(reg_tree, alpha = 200)[[1]])
