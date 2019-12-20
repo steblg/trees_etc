@@ -1,12 +1,24 @@
 #To be reworked when using S3
 
-node_defn <- function(node){
+node_defn <- function(node, as_str = FALSE){
   slL <- list()
   for(e in node$split_conditions_list){
     slL[[e$feature]] <- c(slL[[e$feature]], list(e))
   }
   collapse_feature <- function(cL){ # elements of cL have the same 'feature'
-      if(length(cL) == 1) return(cL)
+      format_rule <- function(x) {
+        if (!as_str) return(x)
+        if (length(x) == 1) {
+          rv <- with(x[[1]], paste("(", feature, operation, split_value, ")"))
+        } else if (length(x) == 2 && x[[1]]$operation %in% c("<", ">=")) {
+          if (x[[1]]$operation == "<")
+            rv <- paste("(", x[[2]]$split, "<=", x[[1]]$feature, x[[1]]$operation, x[[1]]$split, ")")
+          else
+            rv <- paste("(", x[[1]]$split, "<=", x[[1]]$feature, x[[2]]$operation, x[[2]]$split, ")")  
+        }
+        rv
+      }
+      if(length(cL) == 1) return(format_rule(cL))
       opF <- factor(sapply(cL, function(x) x$operation))
       L <- split(cL, opF)
       names(L) <- NULL
@@ -16,15 +28,18 @@ node_defn <- function(node){
         if(y[[1]]$operation == ">=") return(list(feature = y[[1]]$feature, operation = y[[1]]$operation, split_value = max(sapply(y, function(x) x$split_value))))
         stop(paste(paste("'", y[[1]]$operation, "'", sep =""), "is not supported"))
       }
-      return(lapply(L, collapse_F))
+      rv <- format_rule(lapply(L, collapse_F))
+      return(rv)
   }
-  return(lapply(slL, collapse_feature))
+  rv <- lapply(slL, collapse_feature)
+  if (isTRUE(as_str)) rv <- paste( unlist(rv), collapse = " & ")
+  rv
 }
 
-node_defn_str <- function(node){
-  definition <- unlist(node_defn(node = node), recursive = FALSE, use.names = FALSE)
-  return(paste(sapply(definition, function(x) with(x, paste("(", feature, operation, split_value, ")"))), collapse = " & "))
-}
+# node_defn_str <- function(node, ...){
+  # definition <- unlist(node_defn(node = node, ...), recursive = FALSE, use.names = FALSE)
+  # return(paste(sapply(definition, function(x) with(x, paste("(", feature, operation, split_value, ")"))), collapse = " & "))
+# }
     
 to_data_tree_node <- function(rtree_node, abbrev = TRUE) {
   library(data.tree)
@@ -32,7 +47,7 @@ to_data_tree_node <- function(rtree_node, abbrev = TRUE) {
   if(isTRUE(abbrev)){
     nm <- with(rtree_node, split_conditions[length(split_conditions)])
   } else {
-    nm <- node_defn_str(rtree_node)
+    nm <- node_defn(rtree_node, as_str = TRUE)
   }
   rv <- Node$new(nm)
   for (nm in names(rtree_node)) {
@@ -42,6 +57,7 @@ to_data_tree_node <- function(rtree_node, abbrev = TRUE) {
 }
 
 to_data_tree <- function(xtree, active = NULL){
+  stopifnot(is.null(active) || length(active) == length(xtree))
   library(data.tree)
   
   if (is.null(active)) active <- rep(TRUE, length(xtree))
@@ -54,16 +70,19 @@ to_data_tree <- function(xtree, active = NULL){
 }
 
 print_tree <- function(xtree, active = NULL){
+  stopifnot(is.null(active) || length(active) == length(xtree))
   base::print(to_data_tree(xtree, active = active), "nN", "obsN", "value", "error")
 }
 
 plot_tree <- function(xtree, active = NULL){
+  stopifnot(is.null(active) || length(active) == length(xtree))
   plot(to_data_tree(xtree, active = active))
 }
 
 
 tree_leaves <- function(xtree, active  = NULL, index = TRUE){
   # If isTRUE(index) returns index, i.e. nodes numbers, otherwise returns selector, i.e. logical vector of length(xtree)
+  stopifnot(is.null(active) || length(active) == length(xtree))
   if (is.null(active)) 
     leaves_F <- seq_along(xtree)[sapply(xtree, function(x) is.null(x$children_nN))]
   else {
@@ -82,15 +101,15 @@ tree_leaves <- function(xtree, active  = NULL, index = TRUE){
 tree_leaves_info <- function(xtree, active = NULL, as.dataframe = FALSE){
   leaves_index <- tree_leaves(xtree, active = active)
   leaves <- lapply(leaves_index, function(x) {
-    xn <- rtree_[[x]]
-    xn[["defn"]] <- node_defn_str(xn)
-    xn <- xn[c("nN", "split_conditions", "value", "error", "obsN", "defn")]
+    xn <- xtree[[x]]
+    xn[["defn"]] <- node_defn(xn, as_str = TRUE)
+    xn <- xn[c("nN", "value", "error", "obsN", "defn")]
     xn
   })
 
   if(isTRUE(as.dataframe)){
-    rv <- lapply(leaves_, function(x) {
-      x <- within(x, split_conditions <- paste(split_conditions, collapse = " & "))
+    rv <- lapply(leaves, function(x) {
+      # x <- within(x, split_conditions <- paste(split_conditions, collapse = " & "))
       x <- as.data.frame(x, stringsAsFactors = FALSE)
       row.names(x) <- NULL
       x
@@ -116,6 +135,7 @@ tree_info <- function(xtree, active = NULL) {
   # and provides some "helper" information about this subtree
   # that allowes other functions to treet the subtree as "xtree"
   
+  stopifnot(is.null(active) || length(active) == length(xtree))
   if (is.null(active)) active <- rep(TRUE, length(xtree))
   active_nN <- seq_along(xtree)[active]
   leaves <- tree_leaves(xtree = xtree, active = active, index = TRUE)
@@ -135,5 +155,69 @@ tree_info <- function(xtree, active = NULL) {
 }
 
 
-print_treeinfo <- function(info){
+visual_tree <- function(xtree, active = NULL){
+  stopifnot(is.null(active) || length(active) == length(xtree))
+  if (is.null(active)) active <- rep(TRUE, length(xtree))
+  ti <- tree_info(xtree, active = active)
+  
+  path_L <- vector(mode = "list", length = sum(active))
+  max_path_length <- 1
+  for (leaf in tree_leaves(xtree, active = active)) {
+    path <- walk_up(xtree, leaf)
+    path_L[[leaf]] <- rev(path)
+    if (length(path) > max_path_length) max_path_length <- length(path)
+    path <- path[-1]
+    for (i in seq_along(path)) {
+      if (!is.null(path_L[[path[[i]]]])) {
+        break
+      } else {
+        path_L[[path[[i]]]] <- rev(path[i:length(path)])
+      }
+    }
+  }
+  path_L <- lapply(path_L, function(x){ c(x, rep(NA, max_path_length - length(x))) })
+  # names(path_L) <- NULL
+  # rv <- t(as.data.frame(path_L, fix.empty.names = FALSE))
+  colwidth <- 5
+  stopifnot(colwidth %% 2 == 1)
+  rv <- matrix(unlist(path_L), nrow = length(path_L), byrow = TRUE)
+  # browser()
+  rv <- rv[do.call(order, c(as.data.frame(rv), na.last = FALSE)), ]
+  tab_length <- colwidth %/% 2 
+  tab <- paste(rep(" ", tab_length), collapse = "")
+  filler <- paste(rep(" ", colwidth), collapse = "")
+  char_desc <- function(lev1, lev2 = NULL){
+    if (is.null(lev2)) lev2 <- rep(NA, length(lev1))
+    # browser()
+    lev2_splits <- which(!is.na(lev2) & !duplicated(lev2))
+    nsplits <- length(lev2_splits) / 2
+    borders <- rep(filler, nrow(rv))
+    for( i in seq_len(nsplits)) {
+      s <- lev2_splits[2 * i - 1]
+      e <- lev2_splits[2 * i]
+      borders[s] <- paste(c(tab, "|", rep("-", tab_length)), collapse = "")
+      borders[e] <- paste(c(tab, "*", rep("-", tab_length)), collapse = "")
+      if ((e - s) > 1) borders[(s+1) : (e-1)] <- paste0(tab, "|", tab)
+    }
+    split_regions <- split(lev2_splits, factor(ceiling(seq_along(lev2_splits) / 2)))
+    rv <- mapply(function(l, r, s){
+      if (is.na(l)) return(tab)
+      if (is.na(r)) return(with(xtree[[l]], split_conditions[length(split_conditions)]))
+      return(s)
+    }, lev1, lev2, borders)
+    # browser()
+    rv
+  }
+  level_L <- vector(mode = 'list', length = ncol(rv))
+  for (i in seq_len(ncol(rv))) {
+    lev1 <- rv[, i]
+    if (i < ncol(rv)) lev2 <- rv[, i + 1] else lev2 <- NULL
+    level_L[[i]] <- char_desc(lev1, lev2)
+  }
+  # browser()
+  rv <- do.call(paste0, level_L)
+  max_width <- max(sapply(rv, nchar))
+  fmt <- paste0('"%-', max_width, 's"')
+  rv <- sprintf(fmt, rv)
+  rv
 }

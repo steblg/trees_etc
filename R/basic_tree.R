@@ -39,8 +39,9 @@ build_basic_tree <- function(Y, X, model.control = model_control()) {
 
   split_along_predictor <- function(x, y) {
     if(is.factor(x)){
+      # stopifnot(require("arrangements"))  # Combinatorics support package
       splits <- levels(x) # this must be changed, too simplistic and not complete
-      op <- '=='
+      op <- '%in%'
     } else {
       splits <- sort(unique(x))
       splits <- (splits[-length(splits)] + splits[-1]) / 2 # select midpoints between observations

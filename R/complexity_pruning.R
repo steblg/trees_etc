@@ -12,6 +12,7 @@ pruning_sequence <- function(xtree, pack = TRUE) {
   
   info <- tree_info(xtree)
   info_list <- list(info)
+  pruned_paths_list <- list(integer(0))
   alpha_list <- 0
   while ((an <- sum(info$active)) > 1) {
     # message("Number of active nodes: ", an)
@@ -20,6 +21,9 @@ pruning_sequence <- function(xtree, pack = TRUE) {
     nn <- which.min(g_seq)
     stopifnot(nn == nnn)
     # message("Pruning: ", nn)
+    # browser()
+    prune_path <- c(tail(pruned_paths_list, 1)[[1]], nn)
+    pruned_paths_list <- c(pruned_paths_list, list(prune_path))
     alpha <- g_seq[nn]
     info <- prune_node(xtree = xtree, node_n = nn, info = info)
     alpha_list <- c(alpha_list, alpha)
@@ -33,12 +37,12 @@ pruning_sequence <- function(xtree, pack = TRUE) {
     return(
       invisible(
 #        mapply(function(x, y, z) list(alpha = x, cp = y, active = z), alpha_list, complexity_penalty_list, active_list, SIMPLIFY = FALSE)
-        mapply(function(x, y) list(alpha = x, active = y), alpha_list, active_list, SIMPLIFY = FALSE)
+        mapply(function(x, y, z) list(alpha = x, active = y, pruned = z), alpha_list, active_list, pruned_paths_list, SIMPLIFY = FALSE)
       )
     )
   } else {
     # return(invisible(list(alpha = alpha_list, cp = complexity_penalty_list, active = active_list)))
-    return(invisible(list(alpha = alpha_list, active = active_list)))
+    return(invisible(list(alpha = alpha_list, active = active_list, pruned = pruned_paths_list)))
   }
 }
 
