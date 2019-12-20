@@ -69,7 +69,7 @@ to_data_tree <- function(xtree, active = NULL){
   return(assembled_tree)
 }
 
-print_tree <- function(xtree, active = NULL){
+print_tree_old <- function(xtree, active = NULL){
   stopifnot(is.null(active) || length(active) == length(xtree))
   base::print(to_data_tree(xtree, active = active), "nN", "obsN", "value", "error")
 }
@@ -154,18 +154,27 @@ tree_info <- function(xtree, active = NULL) {
   return(list(active = active, split_info_gain = info_gain, node_complexity = node_complexity, substitution_error = sub_error, leaves = tmp))
 }
 
-
-visual_tree <- function(xtree, active = NULL){
+path_list <- function(xtree, active = NULL){
+  # Returns list of paths from all active leaves to the 
+  # root node. Paths are expressed as vectors of node numbers
+  # such that the first is always the root node, i.e. #1. Element
+  # 1 in the list is a one-node path from and to the root node.
+  # Element number 'n' will have a path from the node 'n' to the 
+  # root node.
+  # the last one is a leaf.
+  # Paths are not padded, so vectors in the returned list have
+  # different length.
+  
   stopifnot(is.null(active) || length(active) == length(xtree))
   if (is.null(active)) active <- rep(TRUE, length(xtree))
   ti <- tree_info(xtree, active = active)
   
   path_L <- vector(mode = "list", length = sum(active))
-  max_path_length <- 1
+  # max_path_length <- 1
   for (leaf in tree_leaves(xtree, active = active)) {
     path <- walk_up(xtree, leaf)
     path_L[[leaf]] <- rev(path)
-    if (length(path) > max_path_length) max_path_length <- length(path)
+    # if (length(path) > max_path_length) max_path_length <- length(path)
     path <- path[-1]
     for (i in seq_along(path)) {
       if (!is.null(path_L[[path[[i]]]])) {
@@ -175,6 +184,25 @@ visual_tree <- function(xtree, active = NULL){
       }
     }
   }
+  path_L
+}
+
+path_matrix <- function(xtree, active = NULL) {
+  # Returns list from 'path_list' as a matrix
+  
+  path_L <- path_list(xtree = xtree, active = active)
+  max_path_length <- max(sapply(path_L, length))
+  path_L <- lapply(path_L, function(x){ c(x, rep(NA, max_path_length - length(x))) })
+  # names(path_L) <- NULL
+  # rv <- t(as.data.frame(path_L, fix.empty.names = FALSE))
+  rv <- matrix(unlist(path_L), nrow = length(path_L), byrow = TRUE)
+  rv
+}
+
+
+node_img <- function(xtree, active = NULL){
+  path_L <- path_list(xtree = xtree, active = active)
+  max_path_length <- max(sapply(path_L, length))
   path_L <- lapply(path_L, function(x){ c(x, rep(NA, max_path_length - length(x))) })
   # names(path_L) <- NULL
   # rv <- t(as.data.frame(path_L, fix.empty.names = FALSE))
