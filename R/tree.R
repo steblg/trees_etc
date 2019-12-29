@@ -43,6 +43,12 @@ terr <- sum((YY - YYY)^2)/length(YY)
 
 prune_info <- cvtune(medv ~ ., input = Boston[train, ])
 
+print_tree_old(reg_tree)
+data.frame(node_img(reg_tree)
+ti4 <- prune_node(reg_tree, 4)
+print_tree_old(reg_tree, ti4$active)
+data.frame(node_img(reg_tree, ti4$active)
+
 stop()
 
 print_tree(prune_info$tree, active = prune_info$prune_seq$active[[5]])

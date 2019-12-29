@@ -69,6 +69,28 @@ to_data_tree <- function(xtree, active = NULL){
   return(assembled_tree)
 }
 
+to_data_frame <- function(xtree, active = NULL, values = c("nN", "obsN", "value", "error")) {
+  # Returns data.frame, one row per node, 
+  # with columns corresponding to requested
+  # values. 
+  # Arguments: 
+    # xtree: full tree;
+    # active: logical vector marking active nodes;
+    # values: character vector specifying requested values;
+  # Possible values are (defaults are marked with '*'):
+    # "nN": node number, 
+    # "parent_nN": parent node number,
+    # "children_nN": children nodes,
+    # "obsN": number of observation for a node, 
+    # "value": predicted values for an observation that belongs to this node, 
+    # "error": value of the error function for this node.
+    # "split_conditions": split conditions to create this Node
+
+  rv <- as.data.frame(lapply(values, function(v) sapply(xtree, function(x, value) { x[[v]] }, value = v)))
+  colnames(rv) <- values
+  rv
+}
+
 print_tree_old <- function(xtree, active = NULL){
   stopifnot(is.null(active) || length(active) == length(xtree))
   base::print(to_data_tree(xtree, active = active), "nN", "obsN", "value", "error")
@@ -167,7 +189,7 @@ path_list <- function(xtree, active = NULL){
   
   stopifnot(is.null(active) || length(active) == length(xtree))
   if (is.null(active)) active <- rep(TRUE, length(xtree))
-  ti <- tree_info(xtree, active = active)
+  # ti <- tree_info(xtree, active = active)
   
   path_L <- vector(mode = "list", length = sum(active))
   # max_path_length <- 1
@@ -189,28 +211,30 @@ path_list <- function(xtree, active = NULL){
 
 path_matrix <- function(xtree, active = NULL) {
   # Returns list from 'path_list' as a matrix
-  
+  # Order of rows is the same as in the xtree.
+  # NB: this is not the same as ordering by 
   path_L <- path_list(xtree = xtree, active = active)
   max_path_length <- max(sapply(path_L, length))
   path_L <- lapply(path_L, function(x){ c(x, rep(NA, max_path_length - length(x))) })
-  # names(path_L) <- NULL
-  # rv <- t(as.data.frame(path_L, fix.empty.names = FALSE))
   rv <- matrix(unlist(path_L), nrow = length(path_L), byrow = TRUE)
   rv
 }
 
 
-node_img <- function(xtree, active = NULL){
+print_tree <- function(xtree, active = NULL){
+  tree_df <- to_data_frame(xtree)
   path_L <- path_list(xtree = xtree, active = active)
   max_path_length <- max(sapply(path_L, length))
   path_L <- lapply(path_L, function(x){ c(x, rep(NA, max_path_length - length(x))) })
-  # names(path_L) <- NULL
-  # rv <- t(as.data.frame(path_L, fix.empty.names = FALSE))
-  colwidth <- 5
-  stopifnot(colwidth %% 2 == 1)
   rv <- matrix(unlist(path_L), nrow = length(path_L), byrow = TRUE)
-  # browser()
-  rv <- rv[do.call(order, c(as.data.frame(rv), na.last = FALSE)), ]
+  in_order <- seq_len(length(xtree))
+  out_order <- do.call(order, c(as.data.frame(rv), na.last = FALSE))
+  rv <- rv[out_order, ]
+  tree_df <- tree_df[out_order, ]
+  active_out <- active[out_order]
+  
+  colwidth <- 3
+  # stopifnot(colwidth %% 2 == 1)
   tab_length <- colwidth %/% 2 
   tab <- paste(rep(" ", tab_length), collapse = "")
   filler <- paste(rep(" ", colwidth), collapse = "")
@@ -245,7 +269,8 @@ node_img <- function(xtree, active = NULL){
   # browser()
   rv <- do.call(paste0, level_L)
   max_width <- max(sapply(rv, nchar))
-  fmt <- paste0('"%-', max_width, 's"')
+  fmt <- paste0('%-', max_width, 's')
   rv <- sprintf(fmt, rv)
-  rv
+  rv <- cbind(Descr = rv, tree_df)
+  return(rv[active_out, ])
 }
