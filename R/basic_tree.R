@@ -1,3 +1,4 @@
+
 rss <- function(x) var(x) * (length(x) - 1)
 # rss <- function(x) var(x) * length(x)
 
@@ -19,7 +20,7 @@ basic_tree <- function(formula, input, model.control= model_control()) {
     return(build_basic_tree(Y = Y, X = X, model.control = model.control))
 }
 
-model_control <- function(minS = 20, minD = 5, error = c("deviance", "gini")) {
+model_control <- function(minS = 20, minD = 5, error = c("deviance", "gini", "entropy")) {
   # Do not split if number of observations is less or equal to minS
   # Do not split if drop in rss is less or equal to minD percent
   error <- match.arg(error)
@@ -27,26 +28,35 @@ model_control <- function(minS = 20, minD = 5, error = c("deviance", "gini")) {
   return(list(minS = minS, minD = minD, errorFun = errorFun))
 }
 
-build_basic_tree <- function(Y, X, model.control = model_control()) {
+feature_split_num <- function(x){
+  # This is not the most efficient way of defining split points.
+  # ToDo: come up with a better one
+  # 'precision' is a minimal distance between split points
+  breakpoints <- sort(unique(x), na.last = NA)
+  breakpoints <- (breakpoints[-length(breakpoints)] + breakpoints[-1]) / 2 # select midpoints between observations
+  op <- '<'
+  return(list(breakpoints, op))
+}
 
-  if( is.factor(Y) ){
-    stopifnot( ! is.factor(Y) ) # Classification trees aren't implemented yet.
-  } else {
-    minFUN <- model.control[['errorFun']]
-  }
+feature_split_cat <- function(x){
+  xl <- levels(droplevels(x))
+  unique_sets <- sample_space(xl, complimentary = FALSE)
+  op <- '%in%'
+  return(list(unique_sets, op))
+}
+
+feature_split <- function(x){
+  return(if (is.factor(x)) feature_split_cat(x) else feature_split_num(x))
+}
+
+build_basic_tree <- function(Y, X, model.control = model_control()) {
+  minFUN <- model.control[['errorFun']]
   min_size <- model.control$minS
   X_label <- colnames(X)
 
-  split_along_predictor <- function(x, y) {
-    if(is.factor(x)){
-      # stopifnot(require("arrangements"))  # Combinatorics support package
-      splits <- levels(x) # this must be changed, too simplistic and not complete
-      op <- '%in%'
-    } else {
-      splits <- sort(unique(x))
-      splits <- (splits[-length(splits)] + splits[-1]) / 2 # select midpoints between observations
-      op <- '<'
-    }
+  split_feature_region <- function(x, y) {
+      # # stopifnot(require("arrangements"))  # Combinatorics support package
+    splits <- feature_split(x)
     if(length(splits) == 1) return(NULL) # don't attempt to split if all x are the same
     split_list <- lapply(splits, function(s){
       split_filter <- do.call(op, list(x, s))
@@ -82,7 +92,7 @@ build_basic_tree <- function(Y, X, model.control = model_control()) {
       XX <- X[nodeF, ]
       YY <- Y[nodeF]
     }
-    possible_splits <- lapply(XX, split_along_predictor, y = YY)
+    possible_splits <- lapply(XX, split_feature_region, y = YY)
     tmp <- sapply(possible_splits, function(x) if(is.null(x)) NA else sum(x$error))
     if(all(is.na(tmp))) return(NULL) # no allowed splits
     i <- which.min(tmp)

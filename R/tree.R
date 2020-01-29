@@ -3,15 +3,15 @@
 # ToDo:
 #   1. Handling of NA's. For now one has to deal with them (na.omit) prior to using the method;
 #   2. Feature importance
-#   3. Complexity pruning w cross-validation # Done
-#   4. Fix handling of categorical predictors
+    #   3. Complexity pruning w cross-validation # Done
+    #   4. Fix handling of categorical predictors
 #   5. Move to S3
 #   6. Package namespace
 #   7. Change "source" to a proper "package" way of loading files
-#   8. Use "dendrogram" for printing
-#   9. Rewrite 'print' not to use 'data.tree' package # Done.
+    #   8. Rewrite 'print' not to use 'data.tree' package # Done.
 
 source(file.path(getwd(), "R", "basic_tree.R"))
+source(file.path(getwd(), "R", "combinations.R"))
 source(file.path(getwd(), "R", "tree_methods.R"))
 source(file.path(getwd(), "R", "complexity_pruning.R"))
 source(file.path(getwd(), "R", "tree_pruning.R"))
