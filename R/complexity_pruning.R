@@ -1,5 +1,5 @@
 
-#basic_tree <- function(formula, input, model.control= list(minS = 20, minD = 5, error = c("deviance", "gini"))) 
+#basic_tree <- function(formula, input, model.control= list(min_node_size = 20, min_sub_err = 5, error = c("deviance", "gini"))) 
 
 pruning_sequence <- function(xtree, pack = TRUE) {
   # Performs complexity pruning of the tree

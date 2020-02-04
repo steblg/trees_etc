@@ -1,3 +1,9 @@
+
+      # errorVal <- c(errorVal, sum(sapply(rtree_, function(x){
+        # if(x$status == 'P') return(0) else return(x$error)
+      # })))
+
+
 #To be reworked when using S3
 
 node_defn <- function(node, as_str = FALSE){
@@ -162,18 +168,21 @@ tree_info <- function(xtree, active = NULL) {
   active_nN <- seq_along(xtree)[active]
   leaves <- tree_leaves(xtree = xtree, active = active, index = TRUE)
   
-  info_gain <- sub_error <- node_complexity <- rep(0, length(xtree))
+  nd_sub_error <- cum_sub_error <- node_complexity <- rep(0, length(xtree))
   
   for (i in rev(active_nN)) {
     curr_node <- xtree[[i]]
-    info_gain[i] <- with(curr_node, {if (i %in% leaves) 0 else error - sum(best_split$error)}) 
-    sub_error[i] <- with(curr_node, {if (i %in% leaves) 0 else info_gain[i] + (sub_error[children_nN[1]] + sub_error[children_nN[2]])})
+    # nd_sub_error[i] <- with(curr_node, {if (i %in% leaves) 0 else error - sum(best_split$error)}) 
+    # cum_sub_error[i] <- with(curr_node, {if (i %in% leaves) 0 else nd_sub_error[i] + (cum_sub_error[children_nN[1]] + cum_sub_error[children_nN[2]])})
+    nd_sub_error[i] <- if (i %in% leaves) 0 else substitution_error(curr_node) 
+    cum_sub_error[i] <- with(curr_node, {if (i %in% leaves) 0 else nd_sub_error[i] + (cum_sub_error[children_nN[1]] + cum_sub_error[children_nN[2]])})
+
     node_complexity[i] <- with(curr_node, {if (i %in% leaves) 1 else (node_complexity[children_nN[1]] + node_complexity[children_nN[2]])})
   }
   
   tmp <- rep(FALSE, length(xtree))
   tmp[leaves] <- TRUE
-  return(list(active = active, split_info_gain = info_gain, node_complexity = node_complexity, substitution_error = sub_error, leaves = tmp))
+  return(list(active = active, split_info_gain = nd_sub_error, node_complexity = node_complexity, substitution_error = cum_sub_error, leaves = tmp))
 }
 
 path_list <- function(xtree, active = NULL){
@@ -222,6 +231,7 @@ path_matrix <- function(xtree, active = NULL) {
 
 
 print_tree <- function(xtree, active = NULL){
+  if (is.null(active)) active <- rep(TRUE, length(xtree))
   tree_df <- to_data_frame(xtree)
   path_L <- path_list(xtree = xtree, active = active)
   max_path_length <- max(sapply(path_L, length))
