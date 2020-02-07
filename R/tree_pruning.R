@@ -26,9 +26,6 @@ node_sub_errors <- function(xtree, active = NULL) {
   active_nN <- seq_along(xtree)[active]
   leaves <- tree_leaves(xtree = xtree, active = active, index = TRUE)
 
-  # return(sapply(seq_along(xtree), function(i, tree, active){
-    # rv <- with(tree[[i]], {if (i %in% leaves) 0 else error - sum(best_split$error)})
-  # }, tree = xtree, active = active))
   return(sapply(active_nN, function(i, tree){
       rv <- if (i %in% leaves) 0 else substitution_error(tree[[i]])
     }, tree = xtree))
@@ -42,11 +39,7 @@ subtree_substitution_error <- function(xtree, active = NULL) {
   if (is.null(active)) active <- rep(TRUE, length(xtree))
   active_nN <- seq_along(xtree)[active]
   leaves <- tree_leaves(xtree = xtree, active = active, index = TRUE)
-  
-  # nd_sub_error <- sapply(active_nN, function(i, tree){
-    # rv <- with(tree[[i]], {if (i %in% leaves) 0 else error - sum(best_split$error)})
-  # }, tree = xtree)
-  
+    
   nd_sub_error <- node_sub_errors(xtree = xtree, active = active)
 
   cum_sub_error <- vector(mode='numeric', length = length(xtree))
@@ -166,7 +159,7 @@ prune_node <- function(xtree, node_n, info = NULL) {
   nactive <- active
   
   complexity_delta <- with(info, 1 - node_complexity[node_n])
-  substitution_error_delta <- with(info, substitution_error[node_n])
+  substitution_error_delta <- with(info, cum_substitution_error[node_n])
 
   # walking down the subtree that is being pruned
   pruned <- walk_down(xtree = xtree, node_n = node_n, active = active, index = TRUE)
@@ -174,41 +167,18 @@ prune_node <- function(xtree, node_n, info = NULL) {
     active[pruned] <- FALSE
     leaves[pruned] <- FALSE
     leaves[node_n] <- TRUE
-    split_info_gain[pruned] <- 0
-    split_info_gain[node_n] <- 0
+    node_substitution_error[pruned] <- 0
+    node_substitution_error[node_n] <- 0
     node_complexity[pruned] <- 0
-    substitution_error[pruned] <- 0
+    cum_substitution_error[pruned] <- 0
   })
   
   # propagate change up the tree from the node that is being pruned 
   walk_up_path <- walk_up(xtree = xtree, node_n = node_n)
   for ( node_i in walk_up_path){
     info$node_complexity[node_i] <- info$node_complexity[node_i] + complexity_delta
-    info$substitution_error[node_i] <- info$substitution_error[node_i] - substitution_error_delta
+    info$cum_substitution_error[node_i] <- info$cum_substitution_error[node_i] - substitution_error_delta
   }
   
   return(info)
 }
-
-# pruning_sequence <- function(xtree) {
-  # # Performs complexity pruning of the tree "xtree"
-  # # Returns list with two elements:
-  # # alpha: sequence of complexity multipliers;
-  # # info: sequence of corresponding tree_info lists
-  
-  # info <- tree_info(xtree)
-  # info_list <- list(info)
-  # alpha_list <- 0
-  # while ((an <- sum(info$active)) > 1) {
-    # message("Number of active nodes: ", an)
-    # g_seq <- with(info, ifelse(active == TRUE, substitution_error / (node_complexity - 1), NA))
-    # nn <- which.min(g_seq)
-    # message("Pruning: ", nn)
-    # alpha <- g_seq[nn]
-    # info <- prune_node(xtree = xtree, node_n = nn, info = info)
-    # alpha_list <- c(alpha_list, alpha)
-    # info_list <- c(info_list, list(info))
-  # }
-  # return(invisible(list(alpha = alpha_list, info = info_list)))
-# }
-

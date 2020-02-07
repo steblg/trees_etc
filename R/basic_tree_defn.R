@@ -1,6 +1,10 @@
-rss <- function(x) var(x) * (length(x) - 1)
 
-var_error <- function(x) var(x)
+#var_error <- function(x) var(x)
+
+getmode <- function(x) {
+  uv <- unique(x)
+  return(uv[which.max(table(uv))])
+}
 
 gini_impurity <- function(x) {
   probs <- table(x) / length(x)
@@ -10,6 +14,17 @@ gini_impurity <- function(x) {
 entropy <- function(x) {
   probs <- table(x) / length(x)
   return(sum(-probs * log2(probs)))
+}
+
+misclass <- function(x, x_p) {
+  L <- sum(!is.na(x))
+  stopifnot(L > 0)
+  if (missing(x_p)) {
+    probs <- table(x) / L
+    return(1 - max(probs))
+  } else {
+    return(sum(x != x_p, na.rm = TRUE) / L)
+  }
 }
 
 feature_split_num <- function(x){
@@ -53,14 +68,14 @@ split_predictor_region <- function(x, y, err_FUN, min_size) {
     return(rv)
   })
   # browser()
-  error_value <- sapply(split_list, function(X){with(X, sum(err * probs))})
+  error_value <- sapply(split_list, function(X)sum(X$err * X$probs))
   if(all(is.na(error_value))) return(NULL) # not possible to split without breaking min_size requirement
   i <- which.min(error_value)
   rv <- list(split = splits$s[i], op = op, error = split_list[[i]])
   return(rv)
 }
 
-bestNodeSplit <- function(node, X, Y, min_node_size, errorFUN) {
+bestNodeSplit <- function(node, X, Y, model.control) {
   # Given the node find the best possible split for this node
   # 'X' is model matrix
   # 'Y' is model response
@@ -76,16 +91,17 @@ bestNodeSplit <- function(node, X, Y, min_node_size, errorFUN) {
     XX <- X[nodeF, ]
     YY <- Y[nodeF]
   }
-  possible_splits <- lapply(XX, split_predictor_region, y = YY, err_FUN = errorFUN, min_size = min_node_size)
+  possible_splits <- lapply(XX, split_predictor_region, y = YY, err_FUN = model.control$error_func, min_size = model.control$min_node_size)
   # browser()
-  tmp <- sapply(possible_splits, function(x) if(is.null(x)) NA else with(x$error, sum(err * probs)))
+  tmp <- sapply(possible_splits, function(x) if(is.null(x)) NA else sum(x$error$err * x$error$probs))
   if(all(is.na(tmp))) return(NULL) # no allowed splits
   i <- which.min(tmp)
   return(c(list(feature = X_label[i]), possible_splits[[i]]))
 }
 
 substitution_error <- function(node){
-  return(with(node, obsN * (error - sum(with(best_split$error, err * probs)))))
+  bse <- node$best_split$error
+  return(node$obsN * (node$error - sum(bse$err * bse$probs)))
 }
 
 findBestNodeToSplit <- function(nodes, xtree){
@@ -97,7 +113,7 @@ findBestNodeToSplit <- function(nodes, xtree){
   return(nodes[which.max(err_delta)])
 }
 
-createSplit <- function(node_to_split, tree_length, X, Y, min_node_size, errorFUN){
+createSplit <- function(node_to_split, tree_length, X, Y, model.control){
   # 'X' is model matrix
   # 'Y' is model response
 
@@ -105,22 +121,23 @@ createSplit <- function(node_to_split, tree_length, X, Y, min_node_size, errorFU
   N <- tree_length
 
   children <- list()
-  op <- with(node_to_split, best_split$op)
-  if(op == "<") {
+  bs <- node_to_split$best_split
+  bsop <- bs$op
+  if(bsop == "<") {
     nop <- ">="
-  } else if(op == "==") {
+  } else if(bsop == "==") {
     nop <- "!="
   } else {
-    stop(paste("Operation", paste("'", op, "'", sep = ""), "not supported"))
+    stop(paste("Operation", paste("'", bsop, "'", sep = ""), "not supported"))
   }
-  op <- c(op, nop)
+  op <- c(bsop, nop)
   for(j in 1:2){
     child <- list(
       nN = N + j,
       parent_nN = node_to_split$nN
     )
-    add_condition <- with(node_to_split, list(feature=best_split$feature, operation = op[j], split_value=best_split$split))
-    split_condition_str <- c(node_to_split$split_conditions, with(add_condition, paste(feature, operation, split_value)))
+    add_condition <- list(feature = bs$feature, operation = op[j], split_value = bs$split)
+    split_condition_str <- c(node_to_split$split_conditions, do.call(paste, (add_condition)))
     childF <- eval(str2lang(paste(split_condition_str, collapse = ' & ')), envir = X)
 
     child <- within(child, {
@@ -128,11 +145,11 @@ createSplit <- function(node_to_split, tree_length, X, Y, min_node_size, errorFU
       split_conditions_list <- c(node_to_split$split_conditions_list, list(add_condition))
       obsN                  <- sum(childF)
       error                 <- node_to_split$best_split$error$err[j]
-      value                 <- mean(Y[childF])
+      value                 <- model.control$value_func(Y[childF])
       status                <- 'S'
     })
-    child$best_split <- tmp <- bestNodeSplit(child, X = X, Y = Y, min_node_size = min_node_size, errorFUN = errorFUN)
-    if(is.null(tmp)) child <- markNodeLeaf(child)
+    child$best_split <- tmp <- bestNodeSplit(child, X = X, Y = Y, model.control = model.control)
+    if (is.null(tmp)) child <- markNodeLeaf(child)
     children[[j]] <- child
   }
   stopifnot((children[[1]]$obsN + children[[2]]$obsN) == node_to_split$obsN)
@@ -151,7 +168,7 @@ build_basic_tree <- function(Y, X, model.control = model_control()) {
   # 'X' is model matrix
   # 'Y' is model response
   
-  errorFUN <- model.control[['errorFun']]
+  errorFUN <- model.control$error_func
   min_size <- model.control$min_node_size
   X_label <- colnames(X)
 
@@ -172,7 +189,7 @@ build_basic_tree <- function(Y, X, model.control = model_control()) {
     obsN = nrow(X)           # Number of observations for this Node
   )
 
-  tmp <- bestNodeSplit(root_node, X = X, Y = Y, min_node_size = model.control$min_node_size, errorFUN = errorFUN)
+  tmp <- bestNodeSplit(root_node, X = X, Y = Y, model.control = model.control)
   if(is.null(tmp)) { # no allowed splits
     stop("Tree can't be build under current conditions, try changing model.control argument")
   }
@@ -197,10 +214,10 @@ build_basic_tree <- function(Y, X, model.control = model_control()) {
       for(i in nodesN_to_split) rtree_[[i]] <- markNodeLeaf(rtree_[[i]])
       break
     } else {
-      kids <- createSplit(node_to_split = nodeToSplit, tree_length = length(rtree_), X = X, Y = Y, min_node_size = model.control$min_node_size, errorFUN = errorFUN)
+      kids <- createSplit(node_to_split = nodeToSplit, tree_length = length(rtree_), X = X, Y = Y, model.control)
       rtree_[[best_split]] <- within(nodeToSplit, {status <- 'P'; children_nN <- sapply(kids, function(x) x$nN)})
       rtree_ <- c(rtree_, kids)
-      errorVal <- errorVal - with(nodeToSplit, error * obsN) + sum(sapply(kids, function(x) with(x, error * obsN)))
+      errorVal <- errorVal - nodeToSplit$error * nodeToSplit$obsN + sum(sapply(kids, function(x) x$error * x$obsN))
     }
     nodesN_to_split <- seq_len(length(rtree_))[sapply(rtree_, function(x) x$status == 'S')]
   }

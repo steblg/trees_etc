@@ -182,7 +182,7 @@ tree_info <- function(xtree, active = NULL) {
   
   tmp <- rep(FALSE, length(xtree))
   tmp[leaves] <- TRUE
-  return(list(active = active, split_info_gain = nd_sub_error, node_complexity = node_complexity, substitution_error = cum_sub_error, leaves = tmp))
+  return(list(active = active, node_substitution_error = nd_sub_error, node_complexity = node_complexity, cum_substitution_error = cum_sub_error, leaves = tmp))
 }
 
 path_list <- function(xtree, active = NULL){

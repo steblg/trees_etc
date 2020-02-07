@@ -1,23 +1,35 @@
 
-model_control <- function(...) {
+model_control <- function(tree_type = NULL, min_node_size = NULL, min_sub_err = NULL) {
+  # tree_type can be either NULL, "regression" or "classification"
   # Do not split if number of observations is less or equal to min_node_size
   # Do not split if substitution error is less or equal to min_sub_err percent
+  if (is.null(tree_type)) tree_type <- "regression"
+  stopifnot(tree_type %in% c("regression", "classification"))
   default_controls <- list(
-    min_node_size = 10,
-    min_sub_err = 5,
-    error_func = 'variance'
+    tree_type = if (!is.null(tree_type)) tree_type else "regression",
+    min_node_size = if (!is.null(min_node_size)) min_node_size else 10,
+    min_sub_err = if (!is.null(min_sub_err)) min_sub_err else 5
   )
-  requested_controls <- list(...)
-  controls <- default_controls
-  if (length(requested_controls) > 0) {
-    for(nm in names(requested_controls)) 
-      if (nm %in% names(controls)) 
-        controls[[nm]] <- requested_controls[[nm]]
-  }
-  
-  controls <- within( controls, errorFun <- switch(error_func, variance = var_error, gini = gini_impurity, entropy = entropy))
+  if (tree_type == 'regression')
+    func_list <- list(
+      value_func = function(x) mean(x, na.rm = TRUE),
+      error_func = function(x) {
+        L <- sum(!is.na(x))
+        return((1 - 1/L) * var(x, na.rm = TRUE))
+      },
+      prune_error_func = function(x) var(x, na.rm = TRUE)
+    )
+  else
+    func_list <- list(
+      value_func = getmode,
+      error_func = gini_impurity,
+      prune_error_func = misclass
+    )
+    
+  controls <- c(default_controls, func_list)
   return(controls)
 }
+
 
 basic_tree <- function(formula, input, model.control= model_control()) {
     input <- as.data.frame(input)
@@ -28,6 +40,11 @@ basic_tree <- function(formula, input, model.control= model_control()) {
 
 #    Y_label <- as.character(formula_terms)[2]
     Y <- model.response(model.frame(formula, input))
+    
+    if (is.factor(Y)) 
+      stopifnot(model.control$tree_type == 'classification')
+    else
+      stopifnot(model.control$tree_type == 'regression')
 
     # X_label <- attr(formula_terms, "terms.labels")
     X <- model.matrix(formula, input)
