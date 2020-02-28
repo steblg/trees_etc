@@ -41,6 +41,8 @@ basic_tree <- function(formula, input, model.control= model_control()) {
 #    Y_label <- as.character(formula_terms)[2]
     Y <- model.response(model.frame(formula, input))
     
+    if (any(is.na(Y))) stop("Response variable must not have NA values")
+    
     if (is.factor(Y)) 
       stopifnot(model.control$tree_type == 'classification')
     else

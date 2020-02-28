@@ -1,2 +1,4 @@
-# trees_etc: is a collection of tree based ML methods in R
-# that I am writing along with learning ISLR
+# trees_etc: WORK IN PROGRESS .... 
+  collection of tree based statistical learning methods;
+  I am most interested in implementing "knowledge extraction" 
+  methods of ensemble ML algorithms.

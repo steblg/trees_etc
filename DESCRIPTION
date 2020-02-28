@@ -4,8 +4,7 @@ Title: Collection of trees-based ML routines
 Version: 0.1.0
 Author: George Steblovsky <steblg@gmail.com>
 Maintainer: George Steblovsky <steblg@gmail.com>
-Description: Writing my own routines as I read ML theory
-    and try to use R for ML
+Description: tree-based ML methods
 License: 
 Encoding: UTF-8
 LazyData: true
